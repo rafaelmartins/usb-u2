@@ -223,7 +223,7 @@ handle_ctrl(void)
             if (!to_host)
                 break;
 
-            uint8_t status = 0;
+            uint16_t status = 0;
             if (rcpt_device) {
                 // FIXME: handle remote wakeup and self powered
             }
@@ -237,10 +237,7 @@ handle_ctrl(void)
                 UENUM = 0;
             }
 
-            UEINTX &= ~(1 << RXSTPI);
-            UEDATX = status;
-            UEDATX = 0;
-            UEINTX &= ~((1 << TXINI) | (1 << RXOUTI) | (1 << FIFOCON));
+            usb_u2_control_in((uint8_t*) &status, 2, false);
             break;
         }
 
@@ -316,9 +313,7 @@ handle_ctrl(void)
             if (config > 1)
                 break;
 
-            UEINTX &= ~(1 << RXSTPI);
-            UEINTX &= ~(1 << TXINI);
-
+            usb_u2_control_out(NULL, 0);
             usb_u2_configure_endpoints_cb(config);
 
             state = USB_U2_STATE_CONFIGURED;
