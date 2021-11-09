@@ -107,6 +107,7 @@
 
 
 // USB state macros
+
 #define USB_U2_STATE_DEFAULT    0
 #define USB_U2_STATE_ADDRESS    1
 #define USB_U2_STATE_CONFIGURED 2

@@ -213,21 +213,16 @@ handle_ctrl(void)
             goto _stall;
     }
 
-    bool to_host = (req.bmRequestType & USB_U2_REQ_DIR_MASK) == USB_U2_REQ_DIR_DEVICE_TO_HOST;
-    bool rcpt_device = (req.bmRequestType & USB_U2_REQ_RCPT_MASK) == USB_U2_REQ_RCPT_DEVICE;
-    bool rcpt_interface = (req.bmRequestType & USB_U2_REQ_RCPT_MASK) == USB_U2_REQ_RCPT_INTERFACE;
-    bool rcpt_endpoint = (req.bmRequestType & USB_U2_REQ_RCPT_MASK) == USB_U2_REQ_RCPT_ENDPOINT;
-
     switch (req.bRequest) {
         case USB_U2_REQ_GET_STATUS: {
-            if (!to_host)
+            if ((req.bmRequestType & USB_U2_REQ_DIR_MASK) == USB_U2_REQ_DIR_HOST_TO_DEVICE)
                 break;
 
             uint16_t status = 0;
-            if (rcpt_device) {
+            if ((req.bmRequestType & USB_U2_REQ_RCPT_MASK) == USB_U2_REQ_RCPT_DEVICE) {
                 // FIXME: handle remote wakeup and self powered
             }
-            else if (rcpt_endpoint) {
+            else if ((req.bmRequestType & USB_U2_REQ_RCPT_MASK) == USB_U2_REQ_RCPT_ENDPOINT) {
                 uint8_t ep = req.wIndex & 0xf;
                 if (ep >= 5)
                     break;
@@ -246,7 +241,9 @@ handle_ctrl(void)
             break;
 
         case USB_U2_REQ_SET_ADDRESS: {
-            if (to_host || !rcpt_device || state != USB_U2_STATE_DEFAULT)
+            if (((req.bmRequestType & USB_U2_REQ_DIR_MASK) == USB_U2_REQ_DIR_DEVICE_TO_HOST) ||
+                ((req.bmRequestType & USB_U2_REQ_RCPT_MASK) != USB_U2_REQ_RCPT_DEVICE) ||
+                (state != USB_U2_STATE_DEFAULT))
                 break;
 
             UDADDR = req.wValue & 0x7f;
@@ -257,7 +254,8 @@ handle_ctrl(void)
         }
 
         case USB_U2_REQ_GET_DESCRIPTOR: {
-            if (!(to_host && (rcpt_device || rcpt_interface)))
+            if (((req.bmRequestType & USB_U2_REQ_DIR_MASK) == USB_U2_REQ_DIR_HOST_TO_DEVICE) ||
+                ((req.bmRequestType & USB_U2_REQ_RCPT_MASK) == USB_U2_REQ_RCPT_ENDPOINT))
                 break;
 
             const uint8_t *addr = NULL;
@@ -306,7 +304,9 @@ handle_ctrl(void)
             break;
 
         case USB_U2_REQ_SET_CONFIGURATION: {
-            if (to_host || !rcpt_device || state != USB_U2_STATE_ADDRESS)
+            if (((req.bmRequestType & USB_U2_REQ_DIR_MASK) == USB_U2_REQ_DIR_DEVICE_TO_HOST) ||
+                ((req.bmRequestType & USB_U2_REQ_RCPT_MASK) != USB_U2_REQ_RCPT_DEVICE) ||
+                (state != USB_U2_STATE_ADDRESS))
                 break;
 
             config = req.wValue;
@@ -349,14 +349,12 @@ usb_u2_configure_endpoint(const usb_u2_endpoint_descriptor_t *ep)
         return;
     epmax++;
 
-    uint8_t eptype = pgm_read_byte_near(&(ep->bmAttributes));
     uint8_t eps = pgm_read_word_near(&(ep->wMaxPacketSize));
-    uint8_t epsize = (eps <= 8) ? 0 : ((eps <= 16) ? 1 : ((eps <= 32) ? 2 : 3));
 
     UENUM = epnum;
     UECONX |= (1 << EPEN);
-    UECFG0X = (eptype << EPTYPE0) | (((epaddr & 0x80) ? 1 : 0) << EPDIR);
-    UECFG1X = (epsize << EPSIZE0) | (1 << ALLOC);
+    UECFG0X = (pgm_read_byte_near(&(ep->bmAttributes)) << EPTYPE0) | (((epaddr & 0x80) ? 1 : 0) << EPDIR);
+    UECFG1X = ((eps <= 8) ? 0 : ((eps <= 16) ? 1 : ((eps <= 32) ? 2 : 3)) << EPSIZE0) | (1 << ALLOC);
     UERST = (1 << EPRST0) | (1 << EPRST1) | (1 << EPRST2) | (1 << EPRST3) | (1 << EPRST4);
     UERST = 0;
     UENUM = 0;
