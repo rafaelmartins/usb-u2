@@ -121,7 +121,8 @@ usb_u2_control_in(const uint8_t *b, size_t len, bool from_progmem)
     bool with_zlp = (req.wLength > len) && (len % ep0size == 0);
 
     // we can't send more data than requested by host
-    len = req.wLength > len ? len : req.wLength;
+    if (len > req.wLength)
+        len = req.wLength;
 
     while (len > 0 && ((UEINTX & (1 << NAKOUTI)) == 0)) {
         while ((UEINTX & (1 << TXINI)) == 0 && (UEINTX & (1 << NAKOUTI)) == 0);
@@ -158,7 +159,8 @@ usb_u2_control_out(uint8_t *b, size_t len)
     // DATA STAGE
 
     // we can't read more data than sent by host
-    len = req.wLength > len ? len : req.wLength;
+    if (len > req.wLength)
+        len = req.wLength;
     bool with_data = len > 0;
 
     while (len > 0 && ((UEINTX & (1 << NAKINI)) == 0)) {
@@ -259,19 +261,17 @@ handle_ctrl(void)
                 break;
 
             const uint8_t *addr = NULL;
-            uint8_t len = 0;
+            uint8_t len_offset = 0;
             bool from_flash = true;
+
             switch (req.wValue >> 8) {
                 case USB_U2_DESCR_TYPE_DEVICE:
                     addr = (const uint8_t*) usb_u2_device_descriptor_cb();
-                    if (addr != NULL)
-                        len = pgm_read_byte_near(addr);
                     break;
 
                 case USB_U2_DESCR_TYPE_CONFIGURATION:
                     addr = usb_u2_config_descriptor_cb(config);
-                    if (addr != NULL)
-                        len = pgm_read_byte_near(addr + 2);
+                    len_offset = 2;
                     break;
 
                 case USB_U2_DESCR_TYPE_STRING:
@@ -287,15 +287,14 @@ handle_ctrl(void)
                                 break;
                         }
                     }
-                    if (addr != NULL && len == 0)
-                        len = from_flash ? pgm_read_byte_near(addr) : *addr;
                     break;
             }
 
             if (addr == NULL)
                 break;
 
-            usb_u2_control_in(addr, len, from_flash);
+            usb_u2_control_in(addr, from_flash ? pgm_read_byte_near(addr + len_offset) :
+                *(addr + len_offset), from_flash);
             break;
         }
 
