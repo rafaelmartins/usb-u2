@@ -124,28 +124,27 @@ usb_u2_control_in(const uint8_t *b, size_t len, bool from_progmem)
     if (len > req.wLength)
         len = req.wLength;
 
-    while (len > 0 && ((UEINTX & (1 << NAKOUTI)) == 0)) {
-        while ((UEINTX & (1 << TXINI)) == 0 && (UEINTX & (1 << NAKOUTI)) == 0);
-
-        for (uint8_t cur = 0; len > 0 && cur < ep0size; b++, cur++, len--)
-            UEDATX = from_progmem ? pgm_read_byte_near(b) : *b;
-
-        if ((UEINTX & (1 << NAKOUTI)) == 0)
-            UEINTX &= ~(1 << TXINI);
-    }
-
-    if (with_zlp && ((UEINTX & (1 << NAKOUTI)) == 0)) {
-        while ((UEINTX & (1 << TXINI)) == 0);
+    if (len == 0)
         UEINTX &= ~(1 << TXINI);
+
+    while (len > 0 || with_zlp) {
         while ((UEINTX & (1 << TXINI)) == 0);
+
+        while (len > 0 && UEBCLX < ep0size) {
+            UEDATX = from_progmem ? pgm_read_byte_near(b++) : *(b++);
+            len--;
+        }
+
+        UEINTX &= ~(1 << TXINI);
+
+        if (len == 0 && with_zlp)
+            break;
     }
 
     // STATUS STAGE
 
-    while ((UEINTX & (1 << NAKOUTI)) == 0);
-    UEINTX &= ~(1 << NAKOUTI);
-    if ((UEINTX & (1 << RXOUTI)) != 0)
-        UEINTX &= ~(1 << RXOUTI);
+    while ((UEINTX & (1 << RXOUTI)) == 0);
+    UEINTX &= ~(1 << RXOUTI);
 }
 
 
@@ -161,30 +160,25 @@ usb_u2_control_out(uint8_t *b, size_t len)
     // we can't read more data than sent by host
     if (len > req.wLength)
         len = req.wLength;
-    bool with_data = len > 0;
 
-    while (len > 0 && ((UEINTX & (1 << NAKINI)) == 0)) {
-        while ((UEINTX & (1 << RXOUTI)) == 0 && (UEINTX & (1 << NAKINI)) == 0);
+    if (len == 0)
+        UEINTX &= ~(1 << RXOUTI);
 
-        for (uint8_t cur = 0; len > 0 && cur < ep0size; b++, cur++, len--)
-            *b = UEDATX;
+    while (len > 0) {
+        while ((UEINTX & (1 << RXOUTI)) == 0);
 
-        if ((UEINTX & (1 << NAKINI)) == 0)
-            UEINTX &= ~(1 << RXOUTI);
+        while (len > 0 && UEBCLX > 0) {
+            *(b++) = UEDATX;
+            len--;
+        }
+
+        UEINTX &= ~(1 << RXOUTI);
     }
 
     // STATUS STAGE
 
-    if (with_data) {
-        while ((UEINTX & (1 << NAKINI)) == 0);
-        UEINTX &= ~(1 << NAKINI);
-        if ((UEINTX & (1 << TXINI)) == 0)
-            return;
-    }
-
     while ((UEINTX & (1 << TXINI)) == 0);
     UEINTX &= ~(1 << TXINI);
-    while ((UEINTX & (1 << TXINI)) == 0);
 }
 
 
@@ -205,8 +199,11 @@ handle_ctrl(void)
             break;
 
         case USB_U2_REQ_TYPE_VENDOR:
-            if (usb_u2_control_vendor_cb != NULL)
-                usb_u2_control_vendor_cb(&req);
+            if (usb_u2_control_vendor_cb != NULL) {
+                if (usb_u2_control_vendor_cb(&req)) {
+                    UEINTX &= ~(1 << RXSTPI);
+                }
+            }
             // FIXME: discard any unread data
             goto _stall;
             break;
