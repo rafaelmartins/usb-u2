@@ -18,6 +18,7 @@ static volatile uint8_t config;
 static volatile uint8_t epmax;
 static volatile uint8_t ep0size;
 static volatile uint8_t state = USB_U2_STATE_DEFAULT;
+static uint8_t buf[64];
 static usb_u2_control_request_t req;
 
 static const usb_u2_string_descriptor_t default_enus_lang PROGMEM = {
@@ -26,28 +27,12 @@ static const usb_u2_string_descriptor_t default_enus_lang PROGMEM = {
     .wData = {0x0409},
 };
 
-// we use an array of words here to make things easier memory-wise. just write
-// the serial number string to it, starting from index 1.
-static int16_t internal_serial[21] = {
-    (USB_U2_DESCR_TYPE_STRING << 8) | 42,
-};
-
 
 void
 usb_u2_init(void)
 {
     if (state != USB_U2_STATE_DEFAULT)
         return;
-
-    // FIXME: load serial number on demand to avoid using 42 bytes of ram all
-    // the time
-
-    // address range info from datasheet pag 236, table 23-6
-    for (uint8_t i = 1, a = 0x0e; a < 0x18; a++) {
-        uint8_t b = boot_signature_byte_get(a);
-        internal_serial[i++] = (b >> 4) > 9 ? (b >> 4) - 10 + 'a' : (b >> 4) + '0';
-        internal_serial[i++] = (b & 0xf) > 9 ? (b & 0xf) - 10 + 'a' : (b & 0xf) + '0';
-    }
 
     // make sure that 3.3v regulator is on
     REGCR = 0;
@@ -179,6 +164,7 @@ usb_u2_control_out(uint8_t *b, size_t len)
 
     while ((UEINTX & (1 << TXINI)) == 0);
     UEINTX &= ~(1 << TXINI);
+    while ((UEINTX & (1 << TXINI)) == 0);
 }
 
 
@@ -273,15 +259,31 @@ handle_ctrl(void)
 
                 case USB_U2_DESCR_TYPE_STRING:
                     addr = (const uint8_t*) usb_u2_string_descriptor_cb(req.wValue, req.wIndex);
-                    if (addr == NULL) {
-                        switch ((uint8_t) req.wValue) {
-                            case 0:
-                                addr = (const uint8_t*) &default_enus_lang;
-                                break;
-                            case USB_U2_DESCR_STR_IDX_SERIAL_INTERNAL:
-                                addr = (const uint8_t*) &internal_serial;
-                                from_flash = false;
-                                break;
+                    if (addr != NULL)
+                        break;
+
+                    switch ((uint8_t) req.wValue) {
+                        case 0:
+                            addr = (const uint8_t*) &default_enus_lang;
+                            break;
+
+                        case USB_U2_DESCR_STR_IDX_SERIAL_INTERNAL: {
+                            // address range info from datasheet pag 236, table 23-6
+                            uint8_t i = 0;
+                            buf[i++] = 2 + (0x18 - 0x0e) * 4;
+                            buf[i++] = USB_U2_DESCR_TYPE_STRING;
+
+                            for (uint8_t a = 0x0e; a < 0x18; a++) {
+                                uint8_t b = boot_signature_byte_get(a);
+                                buf[i++] = (b >> 4) > 9 ? (b >> 4) - 10 + 'a' : (b >> 4) + '0';
+                                buf[i++] = 0;
+                                buf[i++] = (b & 0xf) > 9 ? (b & 0xf) - 10 + 'a' : (b & 0xf) + '0';
+                                buf[i++] = 0;
+                            }
+
+                            addr = buf;
+                            from_flash = false;
+                            break;
                         }
                     }
                     break;
