@@ -190,6 +190,11 @@ void usb_u2_task(void);
 void usb_u2_configure_endpoint(const usb_u2_endpoint_descriptor_t *ep);
 void usb_u2_control_in(const uint8_t *b, size_t len, bool from_progmem);
 void usb_u2_control_out(uint8_t *b, size_t len);
+void usb_u2_endpoint_select(uint8_t ep);
+bool usb_u2_endpoint_in_ready(void);
+uint8_t usb_u2_endpoint_in(const uint8_t *b, size_t len);
+bool usb_u2_endpoint_out_received(void);
+const uint8_t* usb_u2_endpoint_out(uint8_t *len);
 
 
 // Callbacks
@@ -198,5 +203,3 @@ const uint8_t* usb_u2_config_descriptor_cb(uint8_t config_id);
 const usb_u2_string_descriptor_t* usb_u2_string_descriptor_cb(uint8_t string_id, uint16_t lang_id);
 void usb_u2_configure_endpoints_cb(uint8_t config_id);
 bool usb_u2_control_vendor_cb(const usb_u2_control_request_t *req) __attribute__((weak));
-void usb_u2_endpoint_out_cb(uint8_t ep, uint8_t b, bool first);
-uint8_t usb_u2_endpoint_in_cb(uint8_t ep, bool first);

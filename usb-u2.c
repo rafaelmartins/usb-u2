@@ -78,11 +78,11 @@ ISR(USB_GEN_vect)
     if (desc == NULL)
         return;
     ep0size = pgm_read_word_near(&(desc->bMaxPacketSize0));
-    uint8_t eps = (ep0size <= 8) ? 0 : ((ep0size <= 16) ? 1 : ((ep0size <= 32) ? 2 : 3));
     UENUM = 0;
     UECONX |= (1 << EPEN);
     UECFG0X = 0;
-    UECFG1X = (eps << EPSIZE0) | (1 << ALLOC);
+    UECFG1X = ((ep0size <= 8) ? 0 : ((ep0size <= 16) ? 1 :
+        ((ep0size <= 32) ? 2 : 3)) << EPSIZE0) | (1 << ALLOC);
 
     state = USB_U2_STATE_DEFAULT;
 
@@ -165,6 +165,72 @@ usb_u2_control_out(uint8_t *b, size_t len)
     while ((UEINTX & (1 << TXINI)) == 0);
     UEINTX &= ~(1 << TXINI);
     while ((UEINTX & (1 << TXINI)) == 0);
+}
+
+
+void
+usb_u2_endpoint_select(uint8_t ep)
+{
+    if (ep >= 5)
+        return;
+
+    UENUM = ep;
+}
+
+
+bool
+usb_u2_endpoint_in_ready(void)
+{
+    return (UEINTX & (1 << TXINI)) != 0;
+}
+
+
+uint8_t
+usb_u2_endpoint_in(const uint8_t *b, size_t len)
+{
+    uint8_t epsize = (8 << ((UECFG1X >> EPSIZE0) & 3));
+    if (b == NULL || len > epsize || (UEINTX & (1 << TXINI)) == 0)
+        return 0;
+
+    uint8_t i = 0;
+
+    while (len > 0 && (UEINTX & (1 << RWAL)) != 0) {
+        UEDATX = b[i++];
+        len--;
+    }
+
+    UEINTX &= ~((1 << TXINI) | (1 << FIFOCON));
+
+    return i;
+}
+
+
+bool
+usb_u2_endpoint_out_received(void)
+{
+    return (UEINTX & (1 << RXOUTI)) != 0;
+}
+
+
+const uint8_t*
+usb_u2_endpoint_out(uint8_t *len)
+{
+    if (len == NULL || (UEINTX & (1 << RXOUTI)) == 0)
+        return NULL;
+
+    uint8_t i = 0;
+
+    while ((UEINTX & (1 << RWAL)) != 0)
+        buf[i++] = UEDATX;
+
+    if (i == 0)
+        return NULL;
+
+    *len = i;
+
+    UEINTX &= ~((1 << RXOUTI) | (1 << FIFOCON));
+
+    return buf;
 }
 
 
@@ -365,34 +431,4 @@ usb_u2_task(void)
     UENUM = 0;
     if ((UEINTX & (1 << RXSTPI)) != 0)
         handle_ctrl();
-
-    for (uint8_t i = 1; i <= epmax; i++) {
-        UENUM = i;
-
-        if (UECFG0X & (1 << EPDIR)) { // IN
-            if ((UEINTX & (1 << TXINI)) != 0) {
-                uint8_t len = (1 << (UECFG1X & (3 << EPSIZE0)));
-
-                for (uint8_t j = 0; j < len && (UEINTX & (1 << RWAL)) != 0; j++) {
-                    uint8_t val = usb_u2_endpoint_in_cb(i, j == 0);
-                    UEDATX = val;
-                }
-
-                UEINTX &= ~((1 << TXINI) | (1 << FIFOCON));
-            }
-        }
-        else { // OUT
-            if ((UEINTX & (1 << RXOUTI)) != 0) {
-                uint8_t len = UEBCLX; // avoid get stuck reading forever
-
-                for (uint8_t j = 0; j < len && (UEINTX & (1 << RWAL)) != 0; j++) {
-                    uint8_t val = UEDATX;
-                    usb_u2_endpoint_out_cb(i, val, j == 0);
-                }
-
-                UEINTX &= ~((1 << RXOUTI) | (1 << FIFOCON));
-            }
-        }
-    }
-    UENUM = 0;
 }
