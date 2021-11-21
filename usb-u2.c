@@ -15,6 +15,7 @@
 #include "usb-u2.h"
 
 static volatile uint8_t config;
+static volatile uint8_t num_configs;
 static volatile uint8_t epmax;
 static volatile uint8_t ep0size;
 static volatile uint8_t state = USB_U2_STATE_DEFAULT;
@@ -77,7 +78,10 @@ ISR(USB_GEN_vect)
     const usb_u2_device_descriptor_t *desc = usb_u2_device_descriptor_cb();
     if (desc == NULL)
         return;
+
     ep0size = pgm_read_word_near(&(desc->bMaxPacketSize0));
+    num_configs = pgm_read_word_near(&(desc->bNumConfigurations));
+
     UENUM = 0;
     UECONX |= (1 << EPEN);
     UECFG0X = 0;
@@ -174,7 +178,8 @@ usb_u2_control_out(uint8_t *b, size_t len)
 void
 usb_u2_endpoint_select(uint8_t ep)
 {
-    if (ep >= 5)
+    // series 2 don't have more than 5 endpoints (including 0)
+    if (ep > 4)
         return;
 
     UENUM = ep;
@@ -240,28 +245,22 @@ usb_u2_endpoint_out(uint8_t *len)
 static void
 handle_ctrl(void)
 {
+
     // select control endpoint
     UENUM = 0;
 
     // read request beforehand to make sure we cleanup fifo
     uint8_t *tmp = (uint8_t*) &req;
-    for (uint8_t i = 0; i < sizeof(usb_u2_control_request_t); i++) {
+    for (uint8_t i = 0; i < sizeof(usb_u2_control_request_t); i++)
         tmp[i] = UEDATX;
-    }
 
     switch (req.bmRequestType & USB_U2_REQ_TYPE_MASK) {
         case USB_U2_REQ_TYPE_STANDARD:
             break;
 
         case USB_U2_REQ_TYPE_VENDOR:
-            if (usb_u2_control_vendor_cb != NULL) {
-                if (usb_u2_control_vendor_cb(&req)) {
-                    UEINTX &= ~(1 << RXSTPI);
-                }
-            }
-            // FIXME: discard any unread data
-            goto _stall;
-            break;
+            if (usb_u2_control_vendor_cb != NULL)
+                usb_u2_control_vendor_cb(&req);
 
         default:
             goto _stall;
@@ -278,11 +277,13 @@ handle_ctrl(void)
             }
             else if ((req.bmRequestType & USB_U2_REQ_RCPT_MASK) == USB_U2_REQ_RCPT_ENDPOINT) {
                 uint8_t ep = req.wIndex & 0xf;
-                if (ep >= 5)
+
+                // series 2 don't have more than 5 endpoints (including 0)
+                if (ep > 4)
                     break;
 
                 UENUM = ep;
-                status = (bool) (UECONX & (1 << STALLRQ));
+                status = ((UECONX & (1 << STALLRQ)) != 0) ? (1 << 0) : 0;
                 UENUM = 0;
             }
 
@@ -381,7 +382,7 @@ handle_ctrl(void)
                 break;
 
             config = req.wValue;
-            if (config > 1)
+            if (config > num_configs)
                 break;
 
             usb_u2_control_out(NULL, 0);
