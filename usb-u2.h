@@ -203,3 +203,5 @@ const uint8_t* usb_u2_config_descriptor_cb(uint8_t config_id);
 const usb_u2_string_descriptor_t* usb_u2_string_descriptor_cb(uint8_t string_id, uint16_t lang_id);
 void usb_u2_configure_endpoints_cb(uint8_t config_id);
 bool usb_u2_control_vendor_cb(const usb_u2_control_request_t *req) __attribute__((weak));
+void usb_u2_reset_hook_cb(void) __attribute__((weak));
+void usb_u2_set_address_hook_cb(uint8_t addr) __attribute__((weak));

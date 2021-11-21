@@ -88,6 +88,9 @@ ISR(USB_GEN_vect)
 
     config = 0;
     epmax = 0;
+
+    if (usb_u2_reset_hook_cb != NULL)
+        usb_u2_reset_hook_cb();
 }
 
 
@@ -301,6 +304,10 @@ handle_ctrl(void)
             usb_u2_control_out(NULL, 0);
             UDADDR |= (1 << ADDEN);
             state = USB_U2_STATE_ADDRESS;
+
+            if (usb_u2_set_address_hook_cb != NULL)
+                usb_u2_set_address_hook_cb(req.wValue & 0x7f);
+
             break;
         }
 
