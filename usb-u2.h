@@ -188,8 +188,9 @@ typedef struct {
 void usb_u2_init(void);
 void usb_u2_task(void);
 void usb_u2_configure_endpoint(const usb_u2_endpoint_descriptor_t *ep);
-void usb_u2_control_in(const uint8_t *b, size_t len, bool from_progmem);
-void usb_u2_control_out(uint8_t *b, size_t len);
+uint8_t usb_u2_control_in(const uint8_t *b, size_t len, bool from_progmem);
+uint8_t usb_u2_control_out(uint8_t *b, size_t len);
+void usb_u2_control_out_status(void);
 void usb_u2_endpoint_select(uint8_t ep);
 bool usb_u2_endpoint_in_ready(void);
 uint8_t usb_u2_endpoint_in(const uint8_t *b, size_t len);

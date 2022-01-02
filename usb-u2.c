@@ -97,11 +97,13 @@ ISR(USB_GEN_vect)
 }
 
 
-void
+uint8_t
 usb_u2_control_in(const uint8_t *b, size_t len, bool from_progmem)
 {
+    UENUM = 0;
+
     if ((UEINTX & (1 << RXSTPI)) == 0)
-        return;
+        return 0;
     UEINTX &= ~(1 << RXSTPI);
 
     // DATA STAGE
@@ -118,11 +120,13 @@ usb_u2_control_in(const uint8_t *b, size_t len, bool from_progmem)
     if (len == 0)
         UEINTX &= ~(1 << TXINI);
 
+    uint8_t i = 0;
+
     while (len > 0 || with_zlp) {
         while ((UEINTX & (1 << TXINI)) == 0);
 
         while (len > 0 && UEBCLX < ep0size) {
-            UEDATX = from_progmem ? pgm_read_byte_near(b++) : *(b++);
+            UEDATX = from_progmem ? pgm_read_byte_near(&(b[i++])) : b[i++];
             len--;
         }
 
@@ -136,14 +140,18 @@ usb_u2_control_in(const uint8_t *b, size_t len, bool from_progmem)
 
     while ((UEINTX & (1 << RXOUTI)) == 0);
     UEINTX &= ~(1 << RXOUTI);
+
+    return i;
 }
 
 
-void
+uint8_t
 usb_u2_control_out(uint8_t *b, size_t len)
 {
+    UENUM = 0;
+
     if ((UEINTX & (1 << RXSTPI)) == 0)
-        return;
+        return 0;
     UEINTX &= ~(1 << RXSTPI);
 
     // DATA STAGE
@@ -155,20 +163,33 @@ usb_u2_control_out(uint8_t *b, size_t len)
     if (len == 0)
         UEINTX &= ~(1 << RXOUTI);
 
+    uint8_t i = 0;
+
     while (len > 0) {
         while ((UEINTX & (1 << RXOUTI)) == 0);
 
         while (len > 0 && UEBCLX > 0) {
-            *(b++) = UEDATX;
+            b[i++] = UEDATX;
             len--;
         }
 
         UEINTX &= ~(1 << RXOUTI);
     }
 
-    // STATUS STAGE
-
     while ((UEINTX & (1 << TXINI)) == 0);
+
+    return i;
+}
+
+
+void
+usb_u2_control_out_status(void)
+{
+    UENUM = 0;
+
+    if ((UEINTX & ((1 << RXSTPI) | (1 << RXOUTI))) != 0)
+        return;
+
     UEINTX &= ~(1 << TXINI);
     while ((UEINTX & (1 << TXINI)) == 0);
 }
@@ -195,8 +216,7 @@ usb_u2_endpoint_in_ready(void)
 uint8_t
 usb_u2_endpoint_in(const uint8_t *b, size_t len)
 {
-    uint8_t epsize = (8 << ((UECFG1X >> EPSIZE0) & 3));
-    if (b == NULL || len > epsize || (UEINTX & (1 << TXINI)) == 0)
+    if (b == NULL || (UEINTX & (1 << TXINI)) == 0)
         return 0;
 
     uint8_t i = 0;
@@ -305,6 +325,7 @@ handle_ctrl(void)
 
             UDADDR = req.wValue & 0x7f;
             usb_u2_control_out(NULL, 0);
+            usb_u2_control_out_status();
             UDADDR |= (1 << ADDEN);
             state = USB_U2_STATE_ADDRESS;
 
@@ -398,6 +419,7 @@ handle_ctrl(void)
                 break;
 
             usb_u2_control_out(NULL, 0);
+            usb_u2_control_out_status();
             usb_u2_configure_endpoints_cb(config);
 
             state = USB_U2_STATE_CONFIGURED;
