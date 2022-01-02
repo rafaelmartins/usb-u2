@@ -200,7 +200,7 @@ uint8_t usb_u2_endpoint_out(uint8_t *data, uint8_t len);
 
 // Callbacks
 const usb_u2_device_descriptor_t* usb_u2_device_descriptor_cb(void);
-const uint8_t* usb_u2_config_descriptor_cb(uint8_t config_id);
+const usb_u2_config_descriptor_t* usb_u2_config_descriptor_cb(uint8_t config_id);
 const usb_u2_string_descriptor_t* usb_u2_string_descriptor_cb(uint8_t string_id, uint16_t lang_id);
 void usb_u2_configure_endpoints_cb(uint8_t config_id) __attribute__((weak));
 void usb_u2_control_vendor_cb(const usb_u2_control_request_t *req) __attribute__((weak));

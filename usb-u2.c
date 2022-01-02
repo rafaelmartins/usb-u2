@@ -351,7 +351,7 @@ handle_ctrl(void)
                     break;
 
                 case USB_U2_DESCR_TYPE_CONFIGURATION:
-                    addr = usb_u2_config_descriptor_cb(config);
+                    addr = (const uint8_t*) usb_u2_config_descriptor_cb(config);
                     len_offset = 2;
                     break;
 
