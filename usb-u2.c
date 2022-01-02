@@ -122,7 +122,7 @@ usb_u2_control_in(const uint8_t *b, size_t len, bool from_progmem)
 
     uint8_t i = 0;
 
-    while (len > 0 || with_zlp) {
+    while (len > 0) {
         while ((UEINTX & (1 << TXINI)) == 0);
 
         while (len > 0 && UEBCLX < ep0size) {
@@ -131,9 +131,11 @@ usb_u2_control_in(const uint8_t *b, size_t len, bool from_progmem)
         }
 
         UEINTX &= ~(1 << TXINI);
+    }
 
-        if (len == 0 && with_zlp)
-            break;
+    if (with_zlp) {
+        while ((UEINTX & (1 << TXINI)) == 0);
+        UEINTX &= ~(1 << TXINI);
     }
 
     // STATUS STAGE
