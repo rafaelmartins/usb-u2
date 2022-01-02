@@ -194,7 +194,7 @@ void usb_u2_endpoint_select(uint8_t ep);
 bool usb_u2_endpoint_in_ready(void);
 uint8_t usb_u2_endpoint_in(const uint8_t *b, size_t len);
 bool usb_u2_endpoint_out_received(void);
-const uint8_t* usb_u2_endpoint_out(uint8_t *len);
+uint8_t usb_u2_endpoint_out(uint8_t *data, uint8_t len);
 
 
 // Callbacks

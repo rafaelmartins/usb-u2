@@ -19,7 +19,6 @@ static volatile uint8_t num_configs;
 static volatile uint8_t epmax;
 static volatile uint8_t ep0size;
 static volatile uint8_t state = USB_U2_STATE_DEFAULT;
-static uint8_t buf[64];
 static usb_u2_control_request_t req;
 
 static const usb_u2_string_descriptor_t default_enus_lang PROGMEM = {
@@ -220,25 +219,29 @@ usb_u2_endpoint_out_received(void)
 }
 
 
-const uint8_t*
-usb_u2_endpoint_out(uint8_t *len)
+uint8_t
+usb_u2_endpoint_out(uint8_t *data, uint8_t len)
 {
-    if (len == NULL || (UEINTX & (1 << RXOUTI)) == 0)
-        return NULL;
+    if ((UEINTX & (1 << RXOUTI)) == 0)
+        return 0;
 
     uint8_t i = 0;
 
-    while ((UEINTX & (1 << RWAL)) != 0)
-        buf[i++] = UEDATX;
+    while ((UEINTX & (1 << RWAL)) != 0) {
+        if (i < len) {
+            data[i++] = UEDATX;
+        }
+        else {
+            uint8_t dummy = UEDATX;
+            (void) dummy;
+        }
+    }
 
     if (i == 0)
-        return NULL;
-
-    *len = i;
+        return 0;
 
     UEINTX &= ~((1 << RXOUTI) | (1 << FIFOCON));
-
-    return buf;
+    return i;
 }
 
 
