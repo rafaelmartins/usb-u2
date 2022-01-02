@@ -342,27 +342,27 @@ handle_ctrl(void)
                 ((req.bmRequestType & USB_U2_REQ_RCPT_MASK) == USB_U2_REQ_RCPT_ENDPOINT))
                 break;
 
-            const uint8_t *addr = NULL;
+            const void *addr = NULL;
             uint8_t len_offset = 0;
 
             switch (req.wValue >> 8) {
                 case USB_U2_DESCR_TYPE_DEVICE:
-                    addr = (const uint8_t*) usb_u2_device_descriptor_cb();
+                    addr = usb_u2_device_descriptor_cb();
                     break;
 
                 case USB_U2_DESCR_TYPE_CONFIGURATION:
-                    addr = (const uint8_t*) usb_u2_config_descriptor_cb(config);
+                    addr = usb_u2_config_descriptor_cb(config);
                     len_offset = 2;
                     break;
 
                 case USB_U2_DESCR_TYPE_STRING:
-                    addr = (const uint8_t*) usb_u2_string_descriptor_cb(req.wValue, req.wIndex);
+                    addr = usb_u2_string_descriptor_cb(req.wValue, req.wIndex);
                     if (addr != NULL)
                         break;
 
                     switch ((uint8_t) req.wValue) {
                         case 0:
-                            addr = (const uint8_t*) &default_enus_lang;
+                            addr = &default_enus_lang;
                             break;
 
                         case USB_U2_DESCR_STR_IDX_SERIAL_INTERNAL: {
