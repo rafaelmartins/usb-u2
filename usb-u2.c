@@ -422,7 +422,9 @@ handle_ctrl(void)
 
             usb_u2_control_out(NULL, 0);
             usb_u2_control_out_status();
-            usb_u2_configure_endpoints_cb(config);
+
+            if (usb_u2_configure_endpoints_cb != NULL)
+                usb_u2_configure_endpoints_cb(config);
 
             state = USB_U2_STATE_CONFIGURED;
 
