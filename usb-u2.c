@@ -270,9 +270,6 @@ usb_u2_endpoint_out(uint8_t *data, uint8_t len)
 static void
 handle_ctrl(void)
 {
-    // select control endpoint
-    UENUM = 0;
-
     // read request beforehand to make sure we cleanup fifo
     uint8_t *tmp = (uint8_t*) &req;
     for (uint8_t i = 0; i < sizeof(usb_u2_control_request_t); i++)
