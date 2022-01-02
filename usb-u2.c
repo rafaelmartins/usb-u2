@@ -245,7 +245,6 @@ usb_u2_endpoint_out(uint8_t *len)
 static void
 handle_ctrl(void)
 {
-
     // select control endpoint
     UENUM = 0;
 
@@ -319,7 +318,6 @@ handle_ctrl(void)
 
             const uint8_t *addr = NULL;
             uint8_t len_offset = 0;
-            bool from_flash = true;
 
             switch (req.wValue >> 8) {
                 case USB_U2_DESCR_TYPE_DEVICE:
@@ -342,22 +340,34 @@ handle_ctrl(void)
                             break;
 
                         case USB_U2_DESCR_STR_IDX_SERIAL_INTERNAL: {
-                            // address range info from datasheet pag 236, table 23-6
-                            uint8_t i = 0;
-                            buf[i++] = 2 + (0x18 - 0x0e) * 4;
-                            buf[i++] = USB_U2_DESCR_TYPE_STRING;
+                            UEINTX &= ~(1 << RXSTPI);
+                            while ((UEINTX & (1 << TXINI)) == 0);
 
+                            UEDATX = 2 + (0x18 - 0x0e) * 4;
+                            UEDATX = USB_U2_DESCR_TYPE_STRING;
+
+                            // address range info from datasheet pag 236, table 23-6
                             for (uint8_t a = 0x0e; a < 0x18; a++) {
                                 uint8_t b = boot_signature_byte_get(a);
-                                buf[i++] = (b >> 4) > 9 ? (b >> 4) - 10 + 'a' : (b >> 4) + '0';
-                                buf[i++] = 0;
-                                buf[i++] = (b & 0xf) > 9 ? (b & 0xf) - 10 + 'a' : (b & 0xf) + '0';
-                                buf[i++] = 0;
+                                UEDATX = (b >> 4) > 9 ? (b >> 4) - 10 + 'a' : (b >> 4) + '0';
+                                UEDATX = 0;
+
+                                // here we have the number of sent bytes as multiple of 8,
+                                // that could be a IN packet boundary, lets check it.
+                                if (UEBCLX >= ep0size) {
+                                    UEINTX &= ~(1 << TXINI);
+                                    while ((UEINTX & (1 << TXINI)) == 0);
+                                }
+
+                                UEDATX = (b & 0xf) > 9 ? (b & 0xf) - 10 + 'a' : (b & 0xf) + '0';
+                                UEDATX = 0;
                             }
 
-                            addr = buf;
-                            from_flash = false;
-                            break;
+                            UEINTX &= ~(1 << TXINI);
+                            while ((UEINTX & (1 << RXOUTI)) == 0);
+                            UEINTX &= ~(1 << RXOUTI);
+
+                            addr = NULL;
                         }
                     }
                     break;
@@ -366,8 +376,7 @@ handle_ctrl(void)
             if (addr == NULL)
                 break;
 
-            usb_u2_control_in(addr, from_flash ? pgm_read_byte_near(addr + len_offset) :
-                *(addr + len_offset), from_flash);
+            usb_u2_control_in(addr, pgm_read_byte_near(addr + len_offset), true);
             break;
         }
 
