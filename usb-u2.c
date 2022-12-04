@@ -77,8 +77,8 @@ ISR(USB_GEN_vect)
     if (desc == NULL)
         return;
 
-    ep0size = pgm_read_word_near(&(desc->bMaxPacketSize0));
-    num_configs = pgm_read_word_near(&(desc->bNumConfigurations));
+    ep0size = pgm_read_byte(&(desc->bMaxPacketSize0));
+    num_configs = pgm_read_byte(&(desc->bNumConfigurations));
 
     UENUM = 0;
     UECONX |= (1 << EPEN);
@@ -125,7 +125,7 @@ usb_u2_control_in(const uint8_t *b, size_t len, bool from_progmem)
         while ((UEINTX & (1 << TXINI)) == 0);
 
         while (len > 0 && UEBCLX < ep0size) {
-            UEDATX = from_progmem ? pgm_read_byte_near(&(b[i++])) : b[i++];
+            UEDATX = from_progmem ? pgm_read_byte(&(b[i++])) : b[i++];
             len--;
         }
 
@@ -398,7 +398,7 @@ handle_ctrl(void)
             if (addr == NULL)
                 break;
 
-            usb_u2_control_in(addr, pgm_read_byte_near(addr + len_offset), true);
+            usb_u2_control_in(addr, pgm_read_byte(addr + len_offset), true);
             break;
         }
 
@@ -449,17 +449,17 @@ usb_u2_configure_endpoint(const usb_u2_endpoint_descriptor_t *ep)
     if (ep == NULL)
         return;
 
-    uint8_t epaddr = pgm_read_byte_near(&(ep->bEndpointAddress));
+    uint8_t epaddr = pgm_read_byte(&(ep->bEndpointAddress));
     uint8_t epnum = epaddr & 0xf;
     if (epnum != epmax + 1)
         return;
     epmax++;
 
-    uint8_t eps = pgm_read_word_near(&(ep->wMaxPacketSize));
+    uint8_t eps = pgm_read_byte(&(ep->wMaxPacketSize));
 
     UENUM = epnum;
     UECONX |= (1 << EPEN);
-    UECFG0X = (pgm_read_byte_near(&(ep->bmAttributes)) << EPTYPE0) | (((epaddr & 0x80) ? 1 : 0) << EPDIR);
+    UECFG0X = (pgm_read_byte(&(ep->bmAttributes)) << EPTYPE0) | (((epaddr & 0x80) ? 1 : 0) << EPDIR);
     UECFG1X = ((eps <= 8) ? 0 : ((eps <= 16) ? 1 : ((eps <= 32) ? 2 : 3)) << EPSIZE0) | (1 << ALLOC);
     UERST = (1 << EPRST0) | (1 << EPRST1) | (1 << EPRST2) | (1 << EPRST3) | (1 << EPRST4);
     UERST = 0;
