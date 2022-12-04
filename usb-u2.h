@@ -156,7 +156,7 @@ typedef struct {
 typedef struct {
     uint8_t bLength;
     uint8_t bDescriptorType;
-    int16_t wData[];
+    uint16_t wData[];
 } __attribute__((packed)) usb_u2_string_descriptor_t;
 
 typedef struct {
